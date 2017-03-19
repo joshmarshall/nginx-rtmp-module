@@ -455,7 +455,7 @@ ngx_rtmp_hls_write_variant_playlist(ngx_rtmp_session_t *s)
         return NGX_ERROR;
     }
 
-#define NGX_RTMP_HLS_VAR_HEADER "#EXTM3U\n#EXT-X-VERSION:3\n"
+#define NGX_RTMP_HLS_VAR_HEADER "#EXTM3U\n#EXT-X-VERSION:5\n"
 
     rc = ngx_write_fd(fd, NGX_RTMP_HLS_VAR_HEADER,
                       sizeof(NGX_RTMP_HLS_VAR_HEADER) - 1);

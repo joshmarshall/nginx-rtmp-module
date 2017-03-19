@@ -3,3 +3,6 @@
 /.project
 /.cproject
 /.vscode
+*.swp
+*.swo
+*.vimrc
