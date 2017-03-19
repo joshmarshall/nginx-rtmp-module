@@ -853,6 +853,9 @@ next:
 static ngx_int_t
 ngx_rtmp_log_play(ngx_rtmp_session_t *s, ngx_rtmp_play_t *v)
 {
+    ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+                  "log: ngx_rtmp_log_play");
+
     ngx_rtmp_log_ctx_t *ctx;
 
     if (s->auto_pushed || s->relay) {
@@ -867,6 +870,8 @@ ngx_rtmp_log_play(ngx_rtmp_session_t *s, ngx_rtmp_play_t *v)
     ctx->play = 1;
 
 next:
+    ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+              "log: ngx_rtmp_log_play: next");
     return next_play(s, v);
 }
 

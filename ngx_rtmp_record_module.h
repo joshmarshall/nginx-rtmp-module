@@ -16,15 +16,16 @@
 #define NGX_RTMP_RECORD_OFF             0x01
 #define NGX_RTMP_RECORD_AUDIO           0x02
 #define NGX_RTMP_RECORD_VIDEO           0x04
-#define NGX_RTMP_RECORD_KEYFRAMES       0x08
-#define NGX_RTMP_RECORD_MANUAL          0x10
-
+#define NGX_RTMP_RECORD_DATA            0x08
+#define NGX_RTMP_RECORD_KEYFRAMES       0x10
+#define NGX_RTMP_RECORD_MANUAL          0x20
 
 typedef struct {
     ngx_str_t                           id;
     ngx_uint_t                          flags;
     ngx_str_t                           path;
     size_t                              max_size;
+    size_t                              interval_size;
     size_t                              max_frames;
     ngx_msec_t                          interval;
     ngx_str_t                           suffix;
@@ -53,6 +54,7 @@ typedef struct {
     unsigned                            video_key_sent:1;
     unsigned                            audio:1;
     unsigned                            video:1;
+    unsigned                            record_started:1;
 } ngx_rtmp_record_rec_ctx_t;
 
 
@@ -83,8 +85,21 @@ typedef struct {
 } ngx_rtmp_record_done_t;
 
 
+typedef struct {
+    ngx_str_t                           recorder;
+    ngx_str_t                           path;
+} ngx_rtmp_record_started_t;
+
+
+typedef ngx_int_t (*ngx_rtmp_record_started_pt)(ngx_rtmp_session_t *s,
+        ngx_rtmp_record_started_t *v);
+
+
 typedef ngx_int_t (*ngx_rtmp_record_done_pt)(ngx_rtmp_session_t *s,
         ngx_rtmp_record_done_t *v);
+
+
+extern ngx_rtmp_record_started_pt       ngx_rtmp_record_started;
 
 
 extern ngx_rtmp_record_done_pt          ngx_rtmp_record_done;

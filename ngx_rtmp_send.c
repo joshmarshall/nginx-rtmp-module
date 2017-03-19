@@ -3,7 +3,6 @@
  * Copyright (C) Roman Arutyunyan
  */
 
-
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include "ngx_rtmp.h"
@@ -100,7 +99,7 @@ ngx_rtmp_create_abort(ngx_rtmp_session_t *s, uint32_t csid)
                    "create: abort csid=%uD", csid);
 
     {
-        NGX_RTMP_USER_START(s, NGX_RTMP_MSG_CHUNK_SIZE);
+        NGX_RTMP_USER_START(s, NGX_RTMP_MSG_ABORT);
 
         NGX_RTMP_USER_OUT4(csid);
 
@@ -503,6 +502,7 @@ ngx_rtmp_create_status(ngx_rtmp_session_t *s, char *code, char* level,
     out_inf[0].data = level;
     out_inf[1].data = code;
     out_inf[2].data = desc;
+    trans = 0;
 
     memset(&h, 0, sizeof(h));
 
@@ -591,6 +591,358 @@ ngx_rtmp_send_play_status(ngx_rtmp_session_t *s, char *code, char* level,
 {
     return ngx_rtmp_send_shared_packet(s,
            ngx_rtmp_create_play_status(s, code, level, duration, bytes));
+}
+
+
+// ----------- Based on Adobe FMS 3 application.redirectConnection description --------- //
+
+ngx_chain_t *
+ngx_rtmp_create_redirect_status(ngx_rtmp_session_t *s, char *callMethod, char *desc, ngx_str_t to_url)
+{
+    ngx_rtmp_header_t               h;
+    static double                   dtrans;
+    static double                   dcode;
+
+    ngx_log_debug0(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create redirect status: got data");
+
+    ngx_log_debug5(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create redirect status: method='%s', status code='%s' level='%s' "
+                   "ex.code=%ui ex.redirect='%s'", callMethod,
+                   "NetConnection.Connect.Rejected", "error", 302, to_url.data);
+
+    static ngx_rtmp_amf_elt_t       out_inf_ex_data[] = {
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_string("code"),
+          &dcode, 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("redirect"),
+          NULL, 0 },
+    };
+
+    static ngx_rtmp_amf_elt_t       out_inf[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("level"),
+          "error", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("code"),
+          "NetConnection.Connect.Rejected", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("description"),
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_OBJECT,
+          ngx_string("ex"),
+          out_inf_ex_data,
+          sizeof(out_inf_ex_data) },
+    };
+
+    static ngx_rtmp_amf_elt_t       out_elts[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_null_string,
+          &dtrans, 0 },
+
+        { NGX_RTMP_AMF_NULL,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_OBJECT,
+          ngx_null_string,
+          out_inf,
+          sizeof(out_inf) },
+    };
+
+    ngx_log_debug0(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create redirect status: set structure data");
+
+    out_elts[0].data = callMethod;
+    out_inf[2].data = desc;
+    dcode = 302;
+    dtrans = 0;
+    out_inf_ex_data[1].data = to_url.data;
+
+    ngx_memzero(&h, sizeof(h));
+
+    h.type = NGX_RTMP_MSG_AMF_CMD;
+    h.csid = NGX_RTMP_CSID_AMF;
+    h.msid = NGX_RTMP_MSID;
+
+    return ngx_rtmp_create_amf(s, &h, out_elts,
+                               sizeof(out_elts) / sizeof(out_elts[0]));
+}
+
+
+ngx_int_t
+ngx_rtmp_send_redirect_status(ngx_rtmp_session_t *s,
+                          char *callMethod, char *desc, ngx_str_t to_url)
+{
+    return ngx_rtmp_send_shared_packet(s,
+           ngx_rtmp_create_redirect_status(s, callMethod, desc, to_url));
+}
+
+
+ngx_chain_t *
+ngx_rtmp_create_close_method(ngx_rtmp_session_t *s, char *methodName)
+{
+    ngx_rtmp_header_t               h;
+    static double                   dtrans;
+
+    static ngx_rtmp_amf_elt_t       out_elts[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_null_string,
+          &dtrans, 0 },
+    };
+
+    ngx_log_debug0(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create close method: set structure data");
+
+    out_elts[0].data = methodName;
+    dtrans = 0;
+
+    ngx_memzero(&h, sizeof(h));
+
+    h.type = NGX_RTMP_MSG_AMF_CMD;
+    h.csid = NGX_RTMP_CSID_AMF;
+    h.msid = NGX_RTMP_MSID;
+
+    return ngx_rtmp_create_amf(s, &h, out_elts,
+                               sizeof(out_elts) / sizeof(out_elts[0]));
+}
+
+
+ngx_int_t
+ngx_rtmp_send_close_method(ngx_rtmp_session_t *s, char *methodName)
+{
+    return ngx_rtmp_send_shared_packet(s,
+           ngx_rtmp_create_close_method(s, methodName));
+}
+
+
+ngx_chain_t *
+ngx_rtmp_create_fcpublish(ngx_rtmp_session_t *s, u_char *desc)
+{
+    ngx_rtmp_header_t               h;
+    static double                   trans;
+
+    static ngx_rtmp_amf_elt_t       out_inf[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("level"),
+          "status", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("code"),
+          "NetStream.Publish.Start", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("description"),
+          NULL, 0 },
+    };
+
+    static ngx_rtmp_amf_elt_t       out_elts[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_null_string,
+          "onFCPublish", 0 },
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_null_string,
+          &trans, 0 },
+
+        { NGX_RTMP_AMF_NULL,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_OBJECT,
+          ngx_null_string,
+          out_inf,
+          sizeof(out_inf) },
+    };
+
+    ngx_log_debug0(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create: fcpublish - set structure data");
+
+    out_inf[2].data = desc;
+//    trans = 3.0;                // magick from ffmpeg
+    trans = 0;
+
+    memset(&h, 0, sizeof(h));
+
+    h.type = NGX_RTMP_MSG_AMF_CMD;
+    h.csid = NGX_RTMP_CSID_AMF;
+    h.msid = NGX_RTMP_MSID;
+
+    return ngx_rtmp_create_amf(s, &h, out_elts,
+                               sizeof(out_elts) / sizeof(out_elts[0]));
+}
+
+
+ngx_int_t
+ngx_rtmp_send_fcpublish(ngx_rtmp_session_t *s, u_char *desc)
+{
+    return ngx_rtmp_send_shared_packet(s,
+           ngx_rtmp_create_fcpublish(s, desc));
+}
+
+
+ngx_chain_t *
+ngx_rtmp_create_fcunpublish(ngx_rtmp_session_t *s, u_char *desc)
+{
+    ngx_rtmp_header_t               h;
+    static double                   trans;
+
+    static ngx_rtmp_amf_elt_t       out_inf[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("level"),
+          "status", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("code"),
+          "NetStream.Unpublish.Success", 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("description"),
+          NULL, 0 },
+    };
+
+    static ngx_rtmp_amf_elt_t       out_elts[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_null_string,
+          "onFCUnpublish", 0 },
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_null_string,
+          &trans, 0 },
+
+        { NGX_RTMP_AMF_NULL,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_OBJECT,
+          ngx_null_string,
+          out_inf,
+          sizeof(out_inf) },
+    };
+
+    ngx_log_debug0(NGX_LOG_DEBUG, s->connection->log, 0,
+                   "create: fcunpublish - set structure data");
+
+    out_inf[2].data = desc;
+//    trans = 5.0;                // magick from ffmpeg
+    trans = 0;
+
+    memset(&h, 0, sizeof(h));
+
+    h.type = NGX_RTMP_MSG_AMF_CMD;
+    h.csid = NGX_RTMP_CSID_AMF;
+    h.msid = NGX_RTMP_MSID;
+
+    return ngx_rtmp_create_amf(s, &h, out_elts,
+                               sizeof(out_elts) / sizeof(out_elts[0]));
+}
+
+
+ngx_int_t
+ngx_rtmp_send_fcunpublish(ngx_rtmp_session_t *s, u_char *desc)
+{
+    return ngx_rtmp_send_shared_packet(s,
+           ngx_rtmp_create_fcunpublish(s, desc));
+}
+
+
+ngx_chain_t *
+ngx_rtmp_create_fi(ngx_rtmp_session_t *s)
+{
+    ngx_rtmp_header_t               h;
+    static double                   trans;
+
+    struct tm                       tm;
+    struct timeval                  tv;
+
+    static u_char                   buf_time[NGX_TIME_T_LEN*2 + 1];
+    static u_char                   buf_date[NGX_TIME_T_LEN + 1];
+
+
+    static ngx_rtmp_amf_elt_t       out_inf[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("st"),
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_string("sd"),
+          NULL, 0 },
+    };
+
+    static ngx_rtmp_amf_elt_t       out_elts[] = {
+
+        { NGX_RTMP_AMF_STRING,
+          ngx_null_string,
+          "onFi", 0 },
+
+        { NGX_RTMP_AMF_NUMBER,
+          ngx_null_string,
+          &trans, 0 },
+
+        { NGX_RTMP_AMF_NULL,
+          ngx_null_string,
+          NULL, 0 },
+
+        { NGX_RTMP_AMF_OBJECT,
+          ngx_null_string,
+          out_inf,
+          sizeof(out_inf) },
+    };
+
+    trans = 0;
+
+    ngx_gettimeofday(&tv);
+
+    ngx_libc_localtime((time_t)tv.tv_sec, &tm);
+
+    ngx_memzero(buf_time, sizeof(buf_time));
+    ngx_memzero(buf_date, sizeof(buf_date));
+
+    ngx_sprintf(buf_time, "%02d:%02d:%02d.%06d", tm.tm_hour, tm.tm_min, tm.tm_sec, (int)tv.tv_usec);
+    // Strange order, but FMLE send like this
+    ngx_sprintf(buf_date, "%02d-%02d-%04d", tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900);
+
+    out_inf[0].data = buf_time;
+    out_inf[1].data = buf_date;
+
+    memset(&h, 0, sizeof(h));
+
+    h.type = NGX_RTMP_MSG_AMF_CMD;
+    h.csid = NGX_RTMP_CSID_AMF;
+    h.msid = NGX_RTMP_MSID;
+
+    return ngx_rtmp_create_amf(s, &h, out_elts,
+                               sizeof(out_elts) / sizeof(out_elts[0]));
+}
+
+
+ngx_int_t
+ngx_rtmp_send_fi(ngx_rtmp_session_t *s)
+{
+    return ngx_rtmp_send_shared_packet(s,
+           ngx_rtmp_create_fi(s));
 }
 
 

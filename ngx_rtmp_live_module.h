@@ -33,7 +33,7 @@ struct ngx_rtmp_live_ctx_s {
     ngx_rtmp_live_stream_t             *stream;
     ngx_rtmp_live_ctx_t                *next;
     ngx_uint_t                          ndropped;
-    ngx_rtmp_live_chunk_stream_t        cs[2];
+    ngx_rtmp_live_chunk_stream_t        cs[3];
     ngx_uint_t                          meta_version;
     ngx_event_t                         idle_evt;
     unsigned                            active:1;
@@ -50,6 +50,7 @@ struct ngx_rtmp_live_stream_s {
     ngx_rtmp_bandwidth_t                bw_in;
     ngx_rtmp_bandwidth_t                bw_in_audio;
     ngx_rtmp_bandwidth_t                bw_in_video;
+    ngx_rtmp_bandwidth_t                bw_in_data;
     ngx_rtmp_bandwidth_t                bw_out;
     ngx_msec_t                          epoch;
     unsigned                            active:1;
@@ -71,7 +72,7 @@ typedef struct {
     ngx_flag_t                          publish_notify;
     ngx_flag_t                          play_restart;
     ngx_flag_t                          idle_streams;
-    ngx_msec_t                          buflen;
+    ngx_flag_t                          buffer;
     ngx_pool_t                         *pool;
     ngx_rtmp_live_stream_t             *free_streams;
 } ngx_rtmp_live_app_conf_t;

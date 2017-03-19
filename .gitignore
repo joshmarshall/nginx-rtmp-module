@@ -1,3 +1,8 @@
+/.idea
+/.settings
+/.project
+/.cproject
+/.vscode
 *.swp
 *.swo
 *.vimrc

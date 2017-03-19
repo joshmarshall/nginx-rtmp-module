@@ -358,8 +358,10 @@ static void
 ngx_rtmp_codec_parse_avc_header(ngx_rtmp_session_t *s, ngx_chain_t *in)
 {
     ngx_uint_t              profile_idc, width, height, crop_left, crop_right,
-                            crop_top, crop_bottom, frame_mbs_only, n, cf_idc,
-                            num_ref_frames;
+                            crop_top, crop_bottom, frame_mbs_only, n, cf_n, cf_idc,
+//                            num_ref_frames;
+                            num_ref_frames, sl_size, sl_index, sl_udelta;
+    ngx_int_t               sl_last, sl_next, sl_delta;
     ngx_rtmp_codec_ctx_t   *ctx;
     ngx_rtmp_bit_reader_t   br;
 
@@ -432,16 +434,39 @@ ngx_rtmp_codec_parse_avc_header(ngx_rtmp_session_t *s, ngx_chain_t *in)
         /* seq scaling matrix present */
         if (ngx_rtmp_bit_read(&br, 1)) {
 
-            for (n = 0; n < (cf_idc != 3 ? 8u : 12u); n++) {
+            for (n = 0, cf_n = (cf_idc != 3 ? 8u : 12u); n < cf_n; n++) {
 
                 /* seq scaling list present */
                 if (ngx_rtmp_bit_read(&br, 1)) {
 
-                    /* TODO: scaling_list()
+                    /* scaling list */
                     if (n < 6) {
+                        sl_size = 16;
                     } else {
+                        sl_size = 64;
                     }
-                    */
+
+                    sl_last = 8;
+                    sl_next = 8;
+
+                    for (sl_index = 0; sl_index < sl_size; sl_index++) {
+
+                        if (sl_next != 0) {
+
+                            /* convert to signed: (-1)**k+1 * ceil(k/2) */
+                            sl_udelta = (ngx_uint_t)ngx_rtmp_bit_read_golomb(&br);
+                            sl_delta = (sl_udelta + 1) >> 1;
+                            if ((sl_udelta & 1) == 0) {
+                                sl_delta = -sl_delta;
+                            }
+
+                            sl_next = (sl_last + sl_delta + 256) % 256;
+
+                            if (sl_next != 0) {
+                                sl_last = sl_next;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -581,7 +606,7 @@ ngx_rtmp_codec_reconstruct_meta(ngx_rtmp_session_t *s)
 
         { NGX_RTMP_AMF_STRING,
           ngx_string("Server"),
-          "NGINX RTMP (github.com/arut/nginx-rtmp-module)", 0 },
+          "NGINX RTMP (github.com/sergey-dryabzhinsky/nginx-rtmp-module)", 0 },
 
         { NGX_RTMP_AMF_NUMBER,
           ngx_string("width"),
@@ -820,7 +845,8 @@ ngx_rtmp_codec_meta_data(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
 
     static ngx_rtmp_amf_elt_t       in_elts[] = {
 
-        { NGX_RTMP_AMF_STRING,
+       /* That string is passed by FFmpeg and possibly others (librtmp). It's skipped after at #880 */
+       { NGX_RTMP_AMF_STRING,
           ngx_null_string,
           NULL, 0 },
 
@@ -839,11 +865,19 @@ ngx_rtmp_codec_meta_data(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
 
     ngx_memzero(&v, sizeof(v));
 
-    /* use -1 as a sign of unchanged data;
-     * 0 is a valid value for uncompressed audio */
+    /* use -1 as a sign of unchanged data */
+    v.width = -1;
+    v.height = -1;
+    v.duration = -1;
+    v.frame_rate = -1;
+    v.video_data_rate = -1;
+    v.video_codec_id_n = -1;
+    v.audio_data_rate = -1;
     v.audio_codec_id_n = -1;
+    v.profile[0] = '\0';
+    v.level[0] = '\0';
 
-    /* FFmpeg sends a string in front of actal metadata; ignore it */
+    /* FFmpeg sends a string in front of actual metadata; ignore it */
     skip = !(in->buf->last > in->buf->pos
             && *in->buf->pos == NGX_RTMP_AMF_STRING);
     if (ngx_rtmp_receive_amf(s, in, in_elts + skip,
@@ -854,28 +888,33 @@ ngx_rtmp_codec_meta_data(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_OK;
     }
 
-    ctx->width = (ngx_uint_t) v.width;
-    ctx->height = (ngx_uint_t) v.height;
-    ctx->duration = (ngx_uint_t) v.duration;
-    ctx->frame_rate = (ngx_uint_t) v.frame_rate;
-    ctx->video_data_rate = (ngx_uint_t) v.video_data_rate;
-    ctx->video_codec_id = (ngx_uint_t) v.video_codec_id_n;
-    ctx->audio_data_rate = (ngx_uint_t) v.audio_data_rate;
-    ctx->audio_codec_id = (v.audio_codec_id_n == -1
-            ? 0 : v.audio_codec_id_n == 0
+    if (v.width != -1) ctx->width = (ngx_uint_t) v.width;
+    if (v.height != -1) ctx->height = (ngx_uint_t) v.height;
+    if (v.duration != -1) ctx->duration = (double) v.duration;
+    if (v.frame_rate != -1) ctx->frame_rate = (double) v.frame_rate;
+    if (v.video_data_rate != -1) ctx->video_data_rate = v.video_data_rate;
+    if (v.video_codec_id_n != -1) ctx->video_codec_id = (ngx_uint_t) v.video_codec_id_n;
+    if (v.audio_data_rate != -1) ctx->audio_data_rate = v.audio_data_rate;
+    if (v.audio_codec_id_n != -1) ctx->audio_codec_id = (v.audio_codec_id_n == 0
             ? NGX_RTMP_AUDIO_UNCOMPRESSED : (ngx_uint_t) v.audio_codec_id_n);
-    ngx_memcpy(ctx->profile, v.profile, sizeof(v.profile));
-    ngx_memcpy(ctx->level, v.level, sizeof(v.level));
+    if (v.profile[0] != '\0') ngx_memcpy(ctx->profile, v.profile, sizeof(v.profile));
+    if (v.level[0] != '\0') ngx_memcpy(ctx->level, v.level, sizeof(v.level));
 
     ngx_log_debug8(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
             "codec: data frame: "
-            "width=%ui height=%ui duration=%ui frame_rate=%ui "
+            "width=%ui height=%ui duration=%.3f frame_rate=%.3f "
             "video=%s (%ui) audio=%s (%ui)",
             ctx->width, ctx->height, ctx->duration, ctx->frame_rate,
             ngx_rtmp_get_video_codec_name(ctx->video_codec_id),
             ctx->video_codec_id,
             ngx_rtmp_get_audio_codec_name(ctx->audio_codec_id),
             ctx->audio_codec_id);
+
+    ngx_log_debug2(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+            "codec: data frame: "
+            "video_rate=%.3f audio_rate=%.3f ",
+            ctx->video_data_rate, ctx->audio_data_rate
+            );
 
     switch (cacf->meta) {
         case NGX_RTMP_CODEC_META_ON:
@@ -943,7 +982,15 @@ ngx_rtmp_codec_postconfiguration(ngx_conf_t *cf)
     }
     ngx_str_set(&ch->name, "@setDataFrame");
     ch->handler = ngx_rtmp_codec_meta_data;
-
+    
+    // some encoders send setDataFrame instead of @setDataFrame
+    ch = ngx_array_push(&cmcf->amf);
+    if (ch == NULL) {
+        return NGX_ERROR;
+    }
+    ngx_str_set(&ch->name, "setDataFrame");
+    ch->handler = ngx_rtmp_codec_meta_data;
+    
     ch = ngx_array_push(&cmcf->amf);
     if (ch == NULL) {
         return NGX_ERROR;

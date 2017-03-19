@@ -14,8 +14,8 @@
 #include "ngx_rtmp.h"
 
 
-#define NGX_RTMP_MAX_NAME           256
-#define NGX_RTMP_MAX_URL            256
+#define NGX_RTMP_MAX_NAME           2048
+#define NGX_RTMP_MAX_URL            4096
 #define NGX_RTMP_MAX_ARGS           NGX_RTMP_MAX_NAME
 
 
@@ -57,6 +57,12 @@ typedef struct {
     u_char                          type[16];
     int                             silent;
 } ngx_rtmp_publish_t;
+
+
+typedef struct {
+    ngx_str_t                       playlist;
+    ngx_str_t                       module;
+} ngx_rtmp_playlist_t;
 
 
 typedef struct {
@@ -130,6 +136,7 @@ typedef ngx_int_t (*ngx_rtmp_recorded_pt)(ngx_rtmp_session_t *s,
 typedef ngx_int_t (*ngx_rtmp_set_buflen_pt)(ngx_rtmp_session_t *s,
         ngx_rtmp_set_buflen_t *v);
 
+typedef ngx_int_t (*ngx_rtmp_playlist_pt)(ngx_rtmp_session_t *s, ngx_rtmp_playlist_t *v);
 
 extern ngx_rtmp_connect_pt          ngx_rtmp_connect;
 extern ngx_rtmp_disconnect_pt       ngx_rtmp_disconnect;
@@ -147,5 +154,6 @@ extern ngx_rtmp_stream_dry_pt       ngx_rtmp_stream_dry;
 extern ngx_rtmp_set_buflen_pt       ngx_rtmp_set_buflen;
 extern ngx_rtmp_recorded_pt         ngx_rtmp_recorded;
 
+extern ngx_rtmp_playlist_pt         ngx_rtmp_playlist;
 
 #endif /*_NGX_RTMP_CMD_H_INCLUDED_ */

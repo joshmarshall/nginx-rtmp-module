@@ -449,10 +449,17 @@ next:
 static ngx_int_t
 ngx_rtmp_access_play(ngx_rtmp_session_t *s, ngx_rtmp_play_t *v)
 {
+    ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+                  "access: ngx_rtmp_access_play");
+
     if (ngx_rtmp_access(s, NGX_RTMP_ACCESS_PLAY) != NGX_OK) {
+        ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+                      "access: ngx_rtmp_access_play: error");
         return NGX_ERROR;
     }
 
+    ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+                  "access: ngx_rtmp_access_play: next");
     return next_play(s, v);
 }
 

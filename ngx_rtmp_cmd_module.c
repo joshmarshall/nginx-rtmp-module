@@ -44,6 +44,7 @@ static ngx_int_t ngx_rtmp_cmd_recorded(ngx_rtmp_session_t *s,
 static ngx_int_t ngx_rtmp_cmd_set_buflen(ngx_rtmp_session_t *s,
        ngx_rtmp_set_buflen_t *v);
 
+static ngx_int_t ngx_rtmp_cmd_playlist(ngx_rtmp_session_t *s, ngx_rtmp_playlist_t *v);
 
 ngx_rtmp_connect_pt         ngx_rtmp_connect;
 ngx_rtmp_disconnect_pt      ngx_rtmp_disconnect;
@@ -62,6 +63,7 @@ ngx_rtmp_stream_dry_pt      ngx_rtmp_stream_dry;
 ngx_rtmp_recorded_pt        ngx_rtmp_recorded;
 ngx_rtmp_set_buflen_pt      ngx_rtmp_set_buflen;
 
+ngx_rtmp_playlist_pt        ngx_rtmp_playlist;
 
 static ngx_int_t ngx_rtmp_cmd_postconfiguration(ngx_conf_t *cf);
 
@@ -574,6 +576,8 @@ ngx_rtmp_cmd_play_init(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
 static ngx_int_t
 ngx_rtmp_cmd_play(ngx_rtmp_session_t *s, ngx_rtmp_play_t *v)
 {
+    ngx_log_error(NGX_LOG_DEBUG, s->connection->log, 0,
+                  "cmd: ngx_rtmp_cmd_play");
     return NGX_OK;
 }
 
@@ -786,6 +790,14 @@ ngx_rtmp_cmd_set_buflen(ngx_rtmp_session_t *s, ngx_rtmp_set_buflen_t *v)
 }
 
 
+static ngx_int_t
+ngx_rtmp_cmd_playlist(ngx_rtmp_session_t *s, ngx_rtmp_playlist_t *v)
+{
+    return NGX_OK;
+}
+
+
+
 static ngx_rtmp_amf_handler_t ngx_rtmp_cmd_map[] = {
     { ngx_string("connect"),            ngx_rtmp_cmd_connect_init           },
     { ngx_string("createStream"),       ngx_rtmp_cmd_create_stream_init     },
@@ -851,6 +863,8 @@ ngx_rtmp_cmd_postconfiguration(ngx_conf_t *cf)
     ngx_rtmp_stream_dry = ngx_rtmp_cmd_stream_dry;
     ngx_rtmp_recorded = ngx_rtmp_cmd_recorded;
     ngx_rtmp_set_buflen = ngx_rtmp_cmd_set_buflen;
+
+    ngx_rtmp_playlist = ngx_rtmp_cmd_playlist;
 
     return NGX_OK;
 }
